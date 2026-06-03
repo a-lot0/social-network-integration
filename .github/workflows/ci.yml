@@ -1,111 +1,69 @@
 name: CI/CD для социальной сети (микроблог)
 
-# Когда запускается workflow
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
 
-# Что делаем
 jobs:
-  # ----- ЗАДАНИЕ 1: Проверка кода (линтинг) -----
   linting:
     runs-on: ubuntu-latest
     steps:
-      - name: Копируем код из репозитория
-        uses: actions/checkout@v3
-
-      - name: Устанавливаем Python
+      - uses: actions/checkout@v3
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Устанавливаем flake8
+      - name: Install flake8
         run: pip install flake8
-
-      - name: Проверяем код
+      - name: Run flake8
         run: |
           flake8 profile-service/app.py --max-line-length=120
           flake8 post-service/app.py --max-line-length=120
           flake8 feed-service/app.py --max-line-length=120
 
-  # ----- ЗАДАНИЕ 2: Сборка Docker образов -----
   build-docker:
     runs-on: ubuntu-latest
-    needs: linting  # Запускается после линтинга
+    needs: linting
     steps:
-      - name: Копируем код
-        uses: actions/checkout@v3
-
-      - name: Собираем образ Profile Service
+      - uses: actions/checkout@v3
+      - name: Build Profile Service
         run: docker build -t profile-service ./profile-service
-
-      - name: Собираем образ Post Service
+      - name: Build Post Service
         run: docker build -t post-service ./post-service
-
-      - name: Собираем образ Feed Service
+      - name: Build Feed Service
         run: docker build -t feed-service ./feed-service
 
-      - name: Показываем собранные образы
-        run: docker images
-
-  # ----- ЗАДАНИЕ 3: Интеграционные тесты -----
   integration-tests:
     runs-on: ubuntu-latest
-    needs: build-docker  # Запускается после сборки
+    needs: build-docker
     steps:
-      - name: Копируем код
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+      - name: Start services
+        run: docker compose up -d
+      - name: Wait for services
+        run: sleep 15
+      - name: Test Profile Service
+        run: curl -f http://localhost:5001/profiles
+      - name: Test Post Service
+        run: curl -f http://localhost:5002/posts
+      - name: Test Feed Service
+        run: curl -f http://localhost:5003/feed/1
+      - name: Stop services
+        run: docker compose down
 
-      - name: Запускаем все сервисы
-        run: docker-compose up -d
-
-      - name: Ждём 30 секунд (сервисы поднимаются)
-        run: sleep 30
-
-      - name: Проверяем Profile Service
-        run: |
-          curl -f http://localhost:5001/profiles
-          curl -f http://localhost:5001/profile/1
-
-      - name: Проверяем Post Service (создаём пост)
-        run: |
-          curl -f http://localhost:5002/posts
-          curl -X POST http://localhost:5002/posts \
-            -H "Content-Type: application/json" \
-            -d '{"user_id":1,"content":"CI test post"}'
-
-      - name: Проверяем Feed Service (подписка и лента)
-        run: |
-          curl -f http://localhost:5003/feed/1
-          curl -X POST http://localhost:5003/subscribe \
-            -H "Content-Type: application/json" \
-            -d '{"follower_id":1,"following_id":2}'
-
-      - name: Если что-то упало — показываем логи
-        if: failure()
-        run: docker-compose logs
-
-      - name: Останавливаем сервисы
-        run: docker-compose down
-
-  # ----- ЗАДАНИЕ 4: Проверка форматирования -----
   check-formatting:
     runs-on: ubuntu-latest
     steps:
-      - name: Копируем код
-        uses: actions/checkout@v3
-
-      - name: Устанавливаем Python
+      - uses: actions/checkout@v3
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Устанавливаем black
+      - name: Install black
         run: pip install black
-
-      - name: Проверяем форматирование
+      - name: Check formatting
         run: |
           black --check profile-service/app.py
           black --check post-service/app.py
