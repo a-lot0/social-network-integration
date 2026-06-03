@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  profile-service:
+    build: ./profile-service
+    ports:
+      - "5001:5001"
+    networks:
+      - social-network
+
+  post-service:
+    build: ./post-service
+    ports:
+      - "5002:5002"
+    depends_on:
+      - profile-service
+    environment:
+      - PROFILE_SERVICE_URL=http://profile-service:5001
+    networks:
+      - social-network
+
+  feed-service:
+    build: ./feed-service
+    ports:
+      - "5003:5003"
+    depends_on:
+      - profile-service
+      - post-service
+    environment:
+      - PROFILE_SERVICE_URL=http://profile-service:5001
+      - POST_SERVICE_URL=http://post-service:5002
+    networks:
+      - social-network
+
+networks:
+  social-network:
+    driver: bridge
